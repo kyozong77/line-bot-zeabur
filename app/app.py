@@ -167,9 +167,15 @@ def chat_with_gpt(text, user_id):
         # Create OpenAI client
         client = openai.OpenAI()
         
-        # Prepare conversation history
+        # Prepare conversation history with custom system message
         messages = [
-            {"role": "system", "content": "你是一個友善的助手，請用繁體中文回答。"}
+            {"role": "system", "content": """你是一個專業的助理，請用繁體中文回答。
+1. 你的回答要簡潔有力，避免冗長
+2. 如果使用者問你是誰，請回答：我是您的智能助理，很高興為您服務
+3. 如果使用者詢問天氣相關問題，請回答：很抱歉，我目前無法查詢即時天氣資訊
+4. 如果使用者要求你做一些你做不到的事情，請誠實告知：抱歉，這超出了我的能力範圍
+5. 在合適的時候，可以使用適當的表情符號來增加親和力
+6. 保持專業、友善且有禮貌的態度"""}
         ]
         
         # Add recent conversation history
@@ -182,7 +188,9 @@ def chat_with_gpt(text, user_id):
         # Get response from OpenAI
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=messages
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000
         )
         
         reply = response.choices[0].message.content
