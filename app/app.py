@@ -22,6 +22,7 @@ from services import WeatherService, PhotoAlbumService, RestaurantService, sched
 from rss_service import RSSService
 from parking_service import ParkingService
 from album_backup_service import AlbumBackupService
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -140,20 +141,23 @@ def callback():
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
-        abort(400)
+        app.logger.error("Invalid signature")
+        return 'Invalid signature', 200  
     except Exception as e:
         app.logger.error(f"Error handling webhook: {str(e)}")
-        abort(500)
+        return f"Error: {str(e)}", 200  
     
-    return 'OK'
+    return 'OK', 200  
 
 # Add handler for join event
 @handler.add(JoinEvent)
 def handle_join(event):
     """處理加入群組事件"""
+    app.logger.info("Received join event")
     try:
         if isinstance(event.source, SourceGroup):
             group_id = event.source.group_id
+            app.logger.info(f"Bot joined group: {group_id}")
             group_summary = line_bot_api.get_group_summary(group_id)
             welcome_message = f"大家好！我是 LINE Bot！\n很高興加入「{group_summary.group_name}」！\n"
             welcome_message += "我可以：\n✨ 查詢天氣（輸入「天氣」）\n🌡️ 查詢空氣品質（輸入「空氣」）\n📰 獲取新聞（輸入「新聞」）\n🅿️ 查詢停車場（輸入「找停車場」）"
@@ -162,9 +166,10 @@ def handle_join(event):
                 event.reply_token,
                 TextSendMessage(text=welcome_message)
             )
-            
+            app.logger.info("Sent welcome message")
     except Exception as e:
         app.logger.error(f"處理加入群組事件時發生錯誤：{str(e)}")
+        return 'OK', 200  
 
 @handler.add(MemberJoinEvent)
 def handle_member_join(event):
@@ -181,17 +186,25 @@ def handle_member_join(event):
             
     except Exception as e:
         app.logger.error(f"處理新成員加入事件時發生錯誤：{str(e)}")
+        return 'OK', 200  
 
 @handler.add(InvitationEvent)
 def handle_invitation(event):
     """處理邀請事件"""
+    app.logger.info("Received invitation event")
     try:
-        if isinstance(event.source, SourceGroup):
-            # 自動接受群組邀請
-            line_bot_api.accept_group_invitation(event.reply_token)
-            
+        app.logger.info(f"Event source type: {type(event.source)}")
+        app.logger.info(f"Event details: {event}")
+        
+        # 直接嘗試接受邀請，不檢查來源類型
+        line_bot_api.accept_group_invitation(event.reply_token)
+        app.logger.info("Successfully accepted group invitation")
+        
+        return 'OK', 200  
     except Exception as e:
         app.logger.error(f"處理邀請事件時發生錯誤：{str(e)}")
+        app.logger.error(f"Error details: {str(e.__class__.__name__)}")
+        return 'OK', 200  
 
 def get_news():
     try:
@@ -639,7 +652,7 @@ def handle_text_message(event):
     reply = chat_with_gpt(text, user_id)
     message = TextSendMessage(text=reply, quick_reply=quick_reply)
     line_bot_api.reply_message(event.reply_token, message)
-    return
+    return 'OK', 200  
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
