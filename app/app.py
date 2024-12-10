@@ -164,6 +164,9 @@ def get_memory(user_id):
 
 def chat_with_gpt(text, user_id):
     try:
+        # Create OpenAI client
+        client = openai.OpenAI()
+        
         # Prepare conversation history
         messages = [
             {"role": "system", "content": "你是一個友善的助手，請用繁體中文回答。"}
@@ -177,7 +180,7 @@ def chat_with_gpt(text, user_id):
         messages.append({"role": "user", "content": text})
         
         # Get response from OpenAI
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages
         )
