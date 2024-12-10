@@ -1,0 +1,15 @@
+bind = "0.0.0.0:5000"
+workers = 4
+threads = 4
+worker_class = "gthread"
+worker_connections = 1000
+timeout = 120
+keepalive = 65
+errorlog = "/app/logs/error.log"
+accesslog = "/app/logs/access.log"
+loglevel = "info"
+capture_output = True
+max_requests = 1000
+max_requests_jitter = 50
+graceful_timeout = 30
+forwarded_allow_ips = "*"

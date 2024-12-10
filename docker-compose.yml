@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  linebot:
+    build: .
+    container_name: linebot
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./app:/app
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Taipei
+    env_file:
+      - .env
