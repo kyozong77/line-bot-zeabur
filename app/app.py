@@ -7,7 +7,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, ImageMessage,
-    JoinEvent,
+    JoinEvent, MemberJoinEvent, InvitationEvent,
     SourceGroup, SourceRoom,
     TemplateSendMessage, ButtonsTemplate, MessageTemplateAction,
     CarouselTemplate, CarouselColumn, URITemplateAction,
@@ -150,20 +150,48 @@ def callback():
 # Add handler for join event
 @handler.add(JoinEvent)
 def handle_join(event):
+    """處理加入群組事件"""
     try:
         if isinstance(event.source, SourceGroup):
             group_id = event.source.group_id
             group_summary = line_bot_api.get_group_summary(group_id)
-            welcome_message = f"大家好！很高興加入 {group_summary.group_name}。我是 ZON 的助理，如果需要我的服務，請用 @ 呼叫我 😊"
-        else:
-            welcome_message = "大家好！我是 ZON 的助理，如果需要我的服務，請用 @ 呼叫我 😊"
-        
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=welcome_message)
-        )
+            welcome_message = f"大家好！我是 LINE Bot！\n很高興加入「{group_summary.group_name}」！\n"
+            welcome_message += "我可以：\n✨ 查詢天氣（輸入「天氣」）\n🌡️ 查詢空氣品質（輸入「空氣」）\n📰 獲取新聞（輸入「新聞」）\n🅿️ 查詢停車場（輸入「找停車場」）"
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=welcome_message)
+            )
+            
     except Exception as e:
-        app.logger.error(f"Error handling join event: {str(e)}")
+        app.logger.error(f"處理加入群組事件時發生錯誤：{str(e)}")
+
+@handler.add(MemberJoinEvent)
+def handle_member_join(event):
+    """處理新成員加入群組事件"""
+    try:
+        if isinstance(event.source, SourceGroup):
+            group_id = event.source.group_id
+            joined_members = line_bot_api.get_group_member_profile(group_id, event.joined.members[0].user_id)
+            welcome_message = f"歡迎 {joined_members.display_name} 加入群組！ 😊"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=welcome_message)
+            )
+            
+    except Exception as e:
+        app.logger.error(f"處理新成員加入事件時發生錯誤：{str(e)}")
+
+@handler.add(InvitationEvent)
+def handle_invitation(event):
+    """處理邀請事件"""
+    try:
+        if isinstance(event.source, SourceGroup):
+            # 自動接受群組邀請
+            line_bot_api.accept_group_invitation(event.reply_token)
+            
+    except Exception as e:
+        app.logger.error(f"處理邀請事件時發生錯誤：{str(e)}")
 
 def get_news():
     try:
