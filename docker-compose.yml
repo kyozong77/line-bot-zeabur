@@ -6,11 +6,12 @@ services:
     container_name: linebot
     restart: always
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - ./app:/app
       - ./logs:/app/logs
     environment:
       - TZ=Asia/Taipei
+      - PYTHONUNBUFFERED=1
     env_file:
       - .env
