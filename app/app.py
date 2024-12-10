@@ -261,59 +261,6 @@ def chat_with_gpt(text, user_id):
         app.logger.error(f"OpenAI API error: {str(e)}")
         return f"抱歉，對話時發生了一點問題：{str(e)}"
 
-@handler.add(MessageEvent, message=ImageMessage)
-def handle_image_message(event):
-    try:
-        # Get message content
-        message_content = line_bot_api.get_message_content(event.message.id)
-        
-        # 如果是在群組中
-        if isinstance(event.source, SourceGroup):
-            group_id = event.source.group_id
-            
-            # 檢查是否為相簿圖片
-            if hasattr(event.message, 'imageSet'):
-                album_id = event.message.imageSet.id
-                
-                # 獲取相簿資訊
-                album_info = line_bot_api.get_group_summary(group_id)
-                album_name = f"Album_{album_id}"  # LINE API 目前無法直接獲取相簿名稱
-                
-                # 獲取圖片 URL
-                image_url = f"https://api-data.line.me/v2/bot/message/{event.message.id}/content"
-                
-                # 備份到 Dropbox
-                result = album_backup_service.backup_album(
-                    group_id=group_id,
-                    album_id=album_id,
-                    album_name=album_name,
-                    image_url=image_url
-                )
-                
-                # 如果是新備份的圖片，發送通知
-                if result == "備份成功":
-                    line_bot_api.push_message(
-                        group_id,
-                        TextSendMessage(text=f"已自動備份圖片到相簿「{album_name}」")
-                    )
-
-        # 處理一般圖片上傳...
-        temp_path = f"temp/{event.message.id}.jpg"
-        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-        
-        with open(temp_path, 'wb') as f:
-            for chunk in message_content.iter_content():
-                f.write(chunk)
-        
-        # 處理圖片上傳到 Dropbox 的邏輯...
-        
-    except Exception as e:
-        app.logger.error(f"處理圖片時發生錯誤：{str(e)}")
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"處理圖片時發生錯誤：{str(e)}")
-        )
-
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     text = event.message.text.strip().lower()
@@ -474,6 +421,17 @@ def handle_text_message(event):
         line_bot_api.reply_message(event.reply_token, flex_message)
         return
     
+    elif text.startswith('天氣 '):
+        location = text[3:].strip()
+        weather_info = weather_service.get_weather(location)
+        flex_message = create_flex_message(
+            title=f'{location} 天氣預報',
+            content=weather_info,
+            image_url='https://example.com/weather-image.jpg'  # 替換為實際的天氣圖片
+        )
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        return
+        
     # 處理餐廳搜尋
     elif text.startswith('找餐廳'):
         location = text[3:].strip()
@@ -506,6 +464,12 @@ def handle_text_message(event):
     # 處理空氣品質
     elif text == '空氣':
         reply = weather_service.get_air_quality()
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+        return
+        
+    elif text.startswith('空氣 '):
+        location = text[3:].strip()
+        reply = weather_service.get_air_quality(location)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
         return
         

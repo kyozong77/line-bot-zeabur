@@ -16,65 +16,151 @@ class WeatherService:
         self.api_key = os.getenv('WEATHER_API_KEY')
         self.base_url = "http://api.openweathermap.org/data/2.5"
         self.aqi_url = "http://api.openweathermap.org/data/2.5/air_pollution"
+        self.geo_url = "http://api.openweathermap.org/geo/1.0/direct"
+        
+    def _get_coordinates(self, city):
+        """獲取城市的經緯度"""
+        try:
+            params = {
+                'q': f"{city},TW",  # 限制在台灣範圍內搜尋
+                'limit': 1,
+                'appid': self.api_key
+            }
+            response = requests.get(self.geo_url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    return data[0]['lat'], data[0]['lon']
+            return None
+        except Exception as e:
+            print(f"獲取座標時發生錯誤：{str(e)}")
+            return None
 
-    def get_weather_forecast(self, city="Taipei"):
+    def get_weather(self, city="台北市"):
         """獲取天氣預報"""
         try:
-            url = f"{self.base_url}/forecast"
-            params = {
-                'q': city,
-                'appid': self.api_key,
-                'units': 'metric',
-                'lang': 'zh_tw'
-            }
-            response = requests.get(url, params=params)
-            data = response.json()
+            # 先獲取城市座標
+            coords = self._get_coordinates(city)
+            if not coords:
+                return f"抱歉，找不到 {city} 的位置資訊"
+                
+            lat, lon = coords
             
-            if response.status_code == 200:
-                today_forecast = data['list'][0]
-                weather_desc = today_forecast['weather'][0]['description']
-                temp = today_forecast['main']['temp']
-                humidity = today_forecast['main']['humidity']
-                rain_prob = today_forecast.get('pop', 0) * 100
+            # 獲取天氣資訊
+            params = {
+                'lat': lat,
+                'lon': lon,
+                'appid': self.api_key,
+                'units': 'metric',  # 使用攝氏溫度
+                'lang': 'zh_tw'     # 使用繁體中文
+            }
+            
+            # 獲取當前天氣
+            current_response = requests.get(f"{self.base_url}/weather", params=params)
+            
+            # 獲取天氣預報
+            forecast_response = requests.get(f"{self.base_url}/forecast", params=params)
+            
+            if current_response.status_code == 200 and forecast_response.status_code == 200:
+                current_data = current_response.json()
+                forecast_data = forecast_response.json()
                 
-                message = f"今日天氣預報：\n"
-                message += f"天氣狀況：{weather_desc}\n"
-                message += f"溫度：{temp}°C\n"
-                message += f"濕度：{humidity}%\n"
+                # 解析當前天氣
+                current_temp = current_data['main']['temp']
+                current_feels_like = current_data['main']['feels_like']
+                current_humidity = current_data['main']['humidity']
+                current_weather = current_data['weather'][0]['description']
                 
-                if rain_prob > 30:
-                    message += f"降雨機率：{rain_prob}%\n"
-                    message += "提醒：今天可能會下雨，記得帶傘！☔"
+                # 找出未來 12 小時內最高和最低溫度
+                next_12h = forecast_data['list'][:4]  # 每 3 小時一筆，取 4 筆約等於 12 小時
+                temps = [item['main']['temp'] for item in next_12h]
+                max_temp = max(temps)
+                min_temp = min(temps)
                 
-                return message
+                # 計算降雨機率
+                rain_probs = [item.get('pop', 0) * 100 for item in next_12h]
+                max_rain_prob = max(rain_probs)
+                
+                # 組合天氣訊息
+                weather_msg = f"📍 {city}天氣預報\n\n"
+                weather_msg += f"目前天氣：{current_weather}\n"
+                weather_msg += f"現在溫度：{current_temp:.1f}°C\n"
+                weather_msg += f"體感溫度：{current_feels_like:.1f}°C\n"
+                weather_msg += f"相對濕度：{current_humidity}%\n"
+                weather_msg += f"12小時內最高溫：{max_temp:.1f}°C\n"
+                weather_msg += f"12小時內最低溫：{min_temp:.1f}°C\n"
+                
+                if max_rain_prob > 0:
+                    weather_msg += f"降雨機率：{max_rain_prob:.0f}%\n"
+                    
+                # 添加天氣建議
+                if max_rain_prob > 50:
+                    weather_msg += "\n☔ 提醒：可能會下雨，記得帶傘！"
+                elif current_temp > 30:
+                    weather_msg += "\n☀️ 提醒：天氣炎熱，記得防曬補水！"
+                elif current_temp < 15:
+                    weather_msg += "\n🧥 提醒：天氣較涼，記得添加衣物！"
+                
+                return weather_msg
+                
             return "抱歉，無法獲取天氣資訊"
+            
         except Exception as e:
-            return f"獲取天氣資訊時發生錯誤：{str(e)}"
+            print(f"獲取天氣時發生錯誤：{str(e)}")
+            return "抱歉，獲取天氣資訊時發生錯誤"
 
-    def get_air_quality(self, lat=25.0330, lon=121.5654):  # 預設台北市座標
+    def get_air_quality(self, city="台北市"):
         """獲取空氣品質資訊"""
         try:
+            # 先獲取城市座標
+            coords = self._get_coordinates(city)
+            if not coords:
+                return f"抱歉，找不到 {city} 的位置資訊"
+                
+            lat, lon = coords
+            
+            # 獲取空氣品質資料
             params = {
                 'lat': lat,
                 'lon': lon,
                 'appid': self.api_key
             }
-            response = requests.get(self.aqi_url, params=params)
-            data = response.json()
             
+            response = requests.get(self.aqi_url, params=params)
             if response.status_code == 200:
+                data = response.json()
+                
+                # 解析空氣品質資料
                 aqi = data['list'][0]['main']['aqi']
+                components = data['list'][0]['components']
+                
+                # AQI 等級說明
                 aqi_levels = {
-                    1: "優良 😊",
-                    2: "普通 😐",
-                    3: "對敏感族群不健康 😷",
-                    4: "不健康 🚫",
-                    5: "非常不健康 ⚠️"
+                    1: ("優良 😊", "適合戶外活動"),
+                    2: ("普通 😐", "敏感族群應注意"),
+                    3: ("對敏感族群不健康 😷", "建議戴口罩"),
+                    4: ("不健康 🚫", "建議減少戶外活動"),
+                    5: ("非常不健康 ⚠️", "盡量待在室內")
                 }
-                return f"目前空氣品質：{aqi_levels.get(aqi, '未知')}"
+                
+                aqi_status, aqi_advice = aqi_levels.get(aqi, ("未知", ""))
+                
+                # 組合空氣品質訊息
+                air_msg = f"📍 {city}空氣品質\n\n"
+                air_msg += f"空氣品質指數(AQI)：{aqi_status}\n"
+                air_msg += f"PM2.5：{components['pm2_5']:.1f} μg/m³\n"
+                air_msg += f"PM10：{components['pm10']:.1f} μg/m³\n"
+                air_msg += f"臭氧(O₃)：{components['o3']:.1f} μg/m³\n"
+                air_msg += f"二氧化氮(NO₂)：{components['no2']:.1f} μg/m³\n"
+                air_msg += f"\n💡 建議：{aqi_advice}"
+                
+                return air_msg
+                
             return "抱歉，無法獲取空氣品質資訊"
+            
         except Exception as e:
-            return f"獲取空氣品質資訊時發生錯誤：{str(e)}"
+            print(f"獲取空氣品質時發生錯誤：{str(e)}")
+            return "抱歉，獲取空氣品質資訊時發生錯誤"
 
 class PhotoAlbumService:
     def __init__(self, dropbox_client):
@@ -155,7 +241,7 @@ def schedule_weather_updates(line_bot_api, group_id):
     weather_service = WeatherService()
     
     def send_morning_weather():
-        weather_msg = weather_service.get_weather_forecast()
+        weather_msg = weather_service.get_weather()
         aqi_msg = weather_service.get_air_quality()
         full_msg = f"{weather_msg}\n\n{aqi_msg}"
         
